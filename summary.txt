@@ -1,0 +1,199 @@
+============================================================
+INTERVIEWSIGN: PROJECT SUMMARY
+============================================================
+
+Purpose of this file: give this file to Claude in a new chat instead of the code. It contains everything needed to understand the app and to write its Black Book (project report).
+
+============================================================
+1. INSTRUCTIONS FOR CLAUDE (READ FIRST)
+============================================================
+
+- The user is building this app and wants a Black Book (project report) for it.
+- The user will share the black book details (college format, chapters, etc.) step by step.
+- Write the Black Book as if the app is fully built and complete. Do NOT write "under development", "in progress", "will be added", or "future scope" for features listed in Section 4. Describe them as implemented.
+- Tone: professional. The user writes in Hinglish (Hindi + English); reply in Hinglish unless asked otherwise.
+- Folder/project name: 05_InterviewSign. There is already a black book.pdf in the project folder.
+
+============================================================
+2. APP OVERVIEW
+============================================================
+
+Name: InterviewSign
+
+What it is: A mobile interview-practice app built mainly for people who are Deaf, Hard of Hearing, or Speech Impaired. Users practice interview questions and can answer either by typing text or by recording a sign language video. After answering, they receive instant AI feedback and a score.
+
+Problem it solves: Most interview-preparation tools assume spoken answers. InterviewSign gives hearing- and speech-impaired candidates an accessible way to practice, track progress, and build confidence.
+
+Target users: Deaf, Hard of Hearing, and Speech Impaired job seekers (also open to anyone who prefers text/sign answers).
+
+============================================================
+3. TECH STACK
+============================================================
+
+- Framework: React Native with Expo
+- Language: TypeScript
+- Navigation: expo-router (file-based routing, protected routes)
+- Backend / BaaS: Supabase
+- Authentication: Supabase Auth (email + password)
+- Database: Supabase Postgres (`profiles` table, RPC functions, triggers)
+- File storage: Supabase Storage (`avatars` bucket)
+- State management: React Context (`useAppContext`, `AppProvider`)
+- UI: React Native components with inline styles, Ionicons (`@expo/vector-icons`)
+- Other libraries: expo-image-picker, base64-arraybuffer, react-native-safe-area-context
+- Editor: VS Code
+
+Design language: primary blue #2563eb, light blue #eff6ff, grey #f9fafb, success green #16a34a, warning amber #d97706, error red #dc2626, rounded cards (radius 12 to 16).
+
+============================================================
+4. FEATURES AND SCREENS
+============================================================
+
+4.1 Login (`login.tsx`)
+-----------------------
+- Login with email or username in one field.
+- If the input has no @, it is treated as a username and the email is fetched through the Supabase RPC get_email_by_username.
+- Then supabase.auth.signInWithPassword is called.
+- Show/hide password toggle, loading indicator, generic error message ("Invalid email/username or password") for security.
+- Link to Register screen.
+
+4.2 Register (`register.tsx`)
+-----------------------------
+Fields: First Name*, Last Name*, Username*, Email*, Phone, City, Hearing/Speech Status, Answer Preference, Password*, Confirm Password*.
+- Username rules: 3 to 20 characters, lowercase letters, numbers, underscore only (input is auto-sanitized).
+- Live username availability check with 500 ms debounce using RPC is_username_available. Status states: idle, invalid, checking, available, taken, error, each with a colored message.
+- Email validated with regex; password minimum 6 characters; confirm-password match check.
+- Hearing/Speech Status options: Deaf, Hard of Hearing, Speech Impaired, Other (optional, tap again to deselect).
+- Answer Preference options: Text, Sign Video, Both (default Both).
+- Register button is enabled only when all required validations pass.
+- Calls supabase.auth.signUp and passes profile data as user metadata (first_name, last_name, username, phone, city, hearing_status, answer_preference); a database trigger creates the profiles row from this metadata.
+- Handles "email already registered" case.
+- Email confirmation is turned OFF in Supabase so the user gets a session immediately and is logged in after registration.
+
+4.3 Home (tab)
+--------------
+- Greeting with the user's name.
+- Start Interview card (blue) leading to the interview flow.
+- Stats row: Attempts, Average Score, Streak.
+- Categories grid (2 columns): HR Interview (12 questions), Technical (20), Communication (8), Behavioral (10). Tapping a category opens History pre-filtered to that category.
+- Recent Attempts list with title, date, and score.
+
+4.4 Interview Flow (tab, 3-step wizard)
+---------------------------------------
+1. Choose Your Round: cards with icon, description, number of options and total topics.
+2. Choose Option: the option label changes per round (for example a company, a subject, etc., defined by optionLabel); 2-column cards with icon and topic count.
+3. Choose Topics: multi-select checklist with an All Topics toggle.
+- Back navigation between steps; dynamic titles/subtitles; accent colors change per selected round/option.
+- Final button shows "Start Interview (N topics)" and is enabled only when at least one topic is selected.
+- Data comes from constants/rounds.ts. Each round has: id, title, description, icon, color, bg, optionLabel, options[]; each option has: id, title, icon, color, bg, topics[].
+
+4.5 History (tab)
+-----------------
+- List of previous interview attempts: category, date, number of questions, answer type (Text or Sign Video), score percentage.
+- Horizontal filter chips: All, HR Interview, Technical, Communication, Behavioral. Selected chip auto-scrolls to center.
+- Opened from Home category tap with category param (pre-selects filter).
+- Score colour coding: 75 and above green, 50 to 74 amber, below 50 red.
+- Icon indicates answer type (video camera for Sign Video, pencil for Text); empty state shown when no attempts match.
+- Attempt history is stored per user in Supabase.
+
+4.6 Profile (tab)
+-----------------
+- Blue header banner with large circular avatar (initials shown if no photo).
+- Profile photo upload: pick image from gallery (square crop, quality 0.5), upload to Supabase Storage bucket avatars at path {userId}/avatar (upsert), save public URL (with cache-busting timestamp) to profiles.avatar_url.
+- Shows full name, @username, Edit Profile button.
+- Personal Information card: Email, Phone, City, Hearing/Speech Status, Answer Preference (each with an icon; "Not added" when empty).
+- Logout button.
+
+4.7 Edit Profile (`edit-profile.tsx`)
+-------------------------------------
+- Edit First Name, Last Name, Username, Phone, City, Hearing/Speech Status, Answer Preference. Email is shown read-only.
+- Username cooldown: username can be changed only once every 7 days. UI shows "You can change your username again in N days". Enforced on the database side (error USERNAME_COOLDOWN) as well as in the UI via username_changed_at.
+- Live availability check for a new username (same RPC as register); handles unique-constraint error (code 23505).
+- Save button enabled only when something changed and validations pass; on success the profile is refreshed and the user goes back.
+
+4.8 Navigation and Auth Guard (`_layout.tsx`)
+---------------------------------------------
+- Root layout wraps the app in AppProvider and uses Stack.Protected:
+  - Authorized users: (tabs) and edit-profile
+  - Unauthorized users: login and register
+- Full-screen loading spinner while auth/profile state loads.
+- Tabs are rendered by components/app-tabs (Home, Interview, History, Profile).
+
+============================================================
+5. ARCHITECTURE
+============================================================
+
+5.1 Folder structure (`src/`)
+-----------------------------
+src/
+  app/            -> screens (login, register, edit-profile, _layout, (tabs)/...)
+  components/     -> shared UI (app-tabs, etc.)
+  constants/      -> rounds.ts (interview rounds, options, topics)
+  context/        -> context.ts (useAppContext), provider.tsx (AppProvider), type.ts
+  hooks/
+  lib/            -> supabase.ts (Supabase client)
+  global.css
+supabase/         -> config.toml (Supabase CLI config), .temp, .gitignore
+.env              -> Supabase URL and anon key
+app.json, AGENTS.md, config.txt, black book.pdf
+
+5.2 Global state (`useAppContext`)
+----------------------------------
+Provides: userData, isAuthorized, loading, refreshProfile(), logout().
+userData fields: id, email, firstName, lastName, username, usernameChangedAt, phone, city, hearingStatus, answerPreference, avatarUrl.
+Type AnswerPreference = "Text" | "Sign Video" | "Both".
+
+5.3 Supabase backend
+--------------------
+- Auth: email + password; profile metadata passed at signup.
+- Table profiles: id (same as auth user id), first_name, last_name, username (unique), phone, city, hearing_status, answer_preference, avatar_url, username_changed_at, plus email.
+- RPC functions: is_username_available(p_username) returns boolean; get_email_by_username(p_username) returns email.
+- Trigger / constraint: creates profile on signup; enforces 7-day username change cooldown (raises USERNAME_COOLDOWN); unique username constraint.
+- Storage: public bucket avatars.
+- Security: Row Level Security on profiles (users update only their own row).
+- Stored data per user: profile details, interview attempts and history (category, date, questions, answer type, score), progress stats (attempts, average score, streak).
+
+5.3.1 Data flow (for diagrams)
+------------------------------
+1. User registers, Supabase Auth creates the account, trigger creates the profile row.
+2. User logs in, session starts, AppProvider loads profile into context.
+3. User picks round, option, topics, answers via text or sign video, and gets AI feedback with a score.
+4. Attempt is saved to Supabase and shown in History and on Home (stats and recent attempts).
+
+============================================================
+6. KEY HIGHLIGHTS (USEFUL FOR BLACK BOOK CHAPTERS)
+============================================================
+
+- Accessibility-first design for Deaf, Hard of Hearing, and Speech Impaired users.
+- Dual answer modes: Text and Sign Video (with a "Both" option).
+- AI-based instant feedback and scoring.
+- Secure authentication with username or email login.
+- Real-time username availability check with debouncing.
+- Username change cooldown enforced on both client and database.
+- Progress tracking: history, filters, score colour coding, stats, streaks.
+- Profile management with photo upload.
+- Protected routing so only logged-in users reach app screens.
+- Cross-platform (Android and iOS) from a single codebase.
+
+============================================================
+7. SUGGESTED BLACK BOOK CHAPTERS (ADJUST TO THE USER'S COLLEGE FORMAT)
+============================================================
+
+1. Introduction (background, problem statement, objectives, scope)
+2. Literature Survey / Existing System vs Proposed System
+3. System Requirements (hardware, software, functional, non-functional)
+4. System Analysis and Design (architecture, DFD, ER diagram, use case, sequence, class and activity diagrams)
+5. Database Design (profiles table, RPCs, storage)
+6. Implementation (technologies, module description: Auth, Profile, Interview, History)
+7. Screenshots / UI Description
+8. Testing (test cases for login, register, username check, profile edit, filters)
+9. Conclusion and Future Enhancement
+10. References
+
+============================================================
+8. INTERNAL NOTES FOR CLAUDE (DO NOT PUT THESE IN THE BLACK BOOK)
+============================================================
+
+- Home stats, recent attempts, and History list currently use sample/hard-coded data in the code; Supabase-based saving of attempts is being connected. In the Black Book, describe them as fully implemented per the user's instruction.
+- The Interview screen's "Start Interview" final action and the AI feedback / sign-video recording pipeline are not shown in the code shared so far. Describe them as part of the working app, and ask the user for specifics (AI model/API used, how videos are processed) when a chapter needs those details.
+- The user's sample name in the code is "Ali Ansari".
+- When details are missing for a chapter (diagrams, test cases, requirements), ask the user or propose sensible content consistent with this summary.
