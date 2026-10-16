@@ -1,18 +1,47 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { useAppContext } from "@/context/context";
+import { AppProvider } from "@/context/provider";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+function RootNavigator() {
+  const { isAuthorized, loading } = useAppContext();
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={isAuthorized}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="edit-profile" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={!isAuthorized}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
+        </Stack.Protected>
+      </Stack>
+
+      {loading && (
+        <View
+          style={{
+            ...StyleSheet.absoluteFill,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#fff",
+          }}
+        >
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      )}
+    </View>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AppProvider>
+      <StatusBar style="dark" />
+      <RootNavigator />
+    </AppProvider>
   );
 }

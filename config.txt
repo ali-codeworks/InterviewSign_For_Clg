@@ -1,0 +1,3 @@
+DATABASE_PASSWORD=S9WKx8WANG@G
+EXPO_PUBLIC_SUPABASE_URL=https://hthfbfyvtrbxjfhnngyq.supabase.co
+EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_t69ciYLGAx9ihB3Oo8xOLQ_ji-iRDl5
