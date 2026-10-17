@@ -1,3 +1,4 @@
+import InterviewSession from "@/components/interview/InterviewSession";
 import { rounds } from "@/constants/rounds";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
@@ -13,6 +14,8 @@ export default function Interview() {
   const [roundId, setRoundId] = useState<string | null>(null);
   const [optionId, setOptionId] = useState<string | null>(null);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [started, setStarted] = useState(false);
+  const [sessionKey, setSessionKey] = useState(0);
 
   const selectedRound = rounds.find((r) => r.id === roundId);
   const selectedOption = selectedRound?.options.find((o) => o.id === optionId);
@@ -52,7 +55,18 @@ export default function Interview() {
       setStep("option");
     } else if (step === "option" && selectedOption) {
       setStep("topic");
+    } else if (step === "topic" && selectedTopics.length > 0) {
+      setStarted(true);
     }
+  };
+
+  const exitSession = () => {
+    setStarted(false);
+    setSessionKey(0);
+    setStep("round");
+    setRoundId(null);
+    setOptionId(null);
+    setSelectedTopics([]);
   };
 
   const title =
@@ -92,6 +106,22 @@ export default function Interview() {
 
   const accent = selectedOption?.color ?? selectedRound?.color ?? "#2563eb";
   const accentBg = selectedOption?.bg ?? selectedRound?.bg ?? "#eff6ff";
+
+  if (started && selectedRound && selectedOption) {
+    return (
+      <InterviewSession
+        key={sessionKey}
+        roundId={selectedRound.id}
+        optionId={selectedOption.id}
+        topics={selectedTopics}
+        total={selectedRound.questions}
+        accent={accent}
+        accentBg={accentBg}
+        onExit={exitSession}
+        onRestart={() => setSessionKey((k) => k + 1)}
+      />
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
