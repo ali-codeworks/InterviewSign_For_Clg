@@ -112,7 +112,9 @@ export default function Interview() {
       <InterviewSession
         key={sessionKey}
         roundId={selectedRound.id}
+        roundTitle={selectedRound.title}
         optionId={selectedOption.id}
+        optionTitle={selectedOption.title}
         topics={selectedTopics}
         total={selectedRound.questions}
         accent={accent}

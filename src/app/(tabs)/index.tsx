@@ -1,5 +1,7 @@
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 const categories = [
@@ -9,27 +11,100 @@ const categories = [
   { id: "4", title: "Behavioral", questions: 10, icon: "happy" },
 ] as const;
 
-const stats = [
-  { label: "Attempts", value: "8" },
-  { label: "Avg Score", value: "78%" },
-  { label: "Streak", value: "3 days" },
-];
+type Row = {
+  id: string;
+  category: string;
+  score: number;
+  created_at: string;
+};
 
-const recentAttempts = [
-  { id: "1", title: "HR Interview", score: 82, date: "12 Oct 2026" },
-  { id: "2", title: "Technical", score: 74, date: "10 Oct 2026" },
-];
+const getScoreColor = (score: number) => {
+  if (score >= 75) return "#16a34a";
+  if (score >= 50) return "#d97706";
+  return "#dc2626";
+};
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+const calcStreak = (rows: Row[]) => {
+  const days = new Set(rows.map((r) => dayKey(new Date(r.created_at))));
+  const cursor = new Date();
+  if (!days.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let count = 0;
+  while (days.has(dayKey(cursor))) {
+    count++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
+};
 
 export default function Home() {
+  const [name, setName] = useState("");
+  const [rows, setRows] = useState<Row[]>([]);
+
+  const load = useCallback(async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile) {
+        setName(
+          `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim(),
+        );
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("interview_attempts")
+      .select("id, category, score, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.log("Load home error:", error.message);
+      return;
+    }
+    setRows((data ?? []) as Row[]);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const avg =
+    rows.length > 0
+      ? Math.round(rows.reduce((sum, r) => sum + r.score, 0) / rows.length)
+      : null;
+  const streak = calcStreak(rows);
+
+  const stats = [
+    { label: "Attempts", value: String(rows.length) },
+    { label: "Avg Score", value: avg === null ? "—" : `${avg}%` },
+    { label: "Streak", value: `${streak} ${streak === 1 ? "day" : "days"}` },
+  ];
+
+  const recentAttempts = rows.slice(0, 2);
+
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
-      {/* Greeting */}
       <Text style={{ fontSize: 14, color: "#6b7280" }}>Welcome back 👋</Text>
       <Text style={{ fontSize: 26, fontWeight: "bold", marginBottom: 16 }}>
-        Ali Ansari
+        {name || "Welcome"}
       </Text>
 
-      {/* Start interview card */}
       <View
         style={{
           backgroundColor: "#2563eb",
@@ -59,7 +134,6 @@ export default function Home() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
       <View style={{ flexDirection: "row", gap: 12, marginBottom: 24 }}>
         {stats.map((s) => (
           <View
@@ -78,7 +152,6 @@ export default function Home() {
         ))}
       </View>
 
-      {/* Categories */}
       <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 12 }}>
         Categories
       </Text>
@@ -115,32 +188,45 @@ export default function Home() {
         ))}
       </View>
 
-      {/* Recent attempts */}
       <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 12 }}>
         Recent Attempts
       </Text>
-      {recentAttempts.map((r) => (
-        <View
-          key={r.id}
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            backgroundColor: "#f9fafb",
-            borderRadius: 12,
-            padding: 14,
-            marginBottom: 10,
-          }}
-        >
-          <View>
-            <Text style={{ fontWeight: "600" }}>{r.title}</Text>
-            <Text style={{ color: "#6b7280", fontSize: 12 }}>{r.date}</Text>
+      {recentAttempts.length === 0 ? (
+        <Text style={{ color: "#6b7280", marginBottom: 24 }}>
+          No attempts yet
+        </Text>
+      ) : (
+        recentAttempts.map((r) => (
+          <View
+            key={r.id}
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: "#f9fafb",
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 10,
+            }}
+          >
+            <View>
+              <Text style={{ fontWeight: "600" }}>{r.category}</Text>
+              <Text style={{ color: "#6b7280", fontSize: 12 }}>
+                {formatDate(r.created_at)}
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: getScoreColor(r.score),
+              }}
+            >
+              {r.score}%
+            </Text>
           </View>
-          <Text style={{ fontSize: 18, fontWeight: "bold", color: "#16a34a" }}>
-            {r.score}%
-          </Text>
-        </View>
-      ))}
+        ))
+      )}
     </ScrollView>
   );
 }

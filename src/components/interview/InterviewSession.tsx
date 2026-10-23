@@ -1,6 +1,7 @@
 import { evaluateAnswers, EvaluationResult } from "@/lib/evaluate";
 import { pickQuestions } from "@/lib/pickQuestions";
 import { speakQuestion, stopSpeaking } from "@/lib/speech";
+import { supabase } from "@/lib/supabase";
 import { transcribeAudio } from "@/lib/transcribe";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
@@ -22,7 +23,9 @@ import { AnswerEntry } from "./types";
 
 type Props = {
   roundId: string;
+  roundTitle: string;
   optionId: string;
+  optionTitle: string;
   topics: string[];
   total: number;
   accent: string;
@@ -58,7 +61,9 @@ const readError = async (error: unknown) => {
 
 export default function InterviewSession({
   roundId,
+  roundTitle,
   optionId,
+  optionTitle,
   topics,
   total,
   accent,
@@ -81,6 +86,7 @@ export default function InterviewSession({
   const [speaking, setSpeaking] = useState(false);
   const [finished, setFinished] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const savedRef = useRef(false);
 
   const current = list[index];
 
@@ -112,6 +118,35 @@ export default function InterviewSession({
       stopSpeaking();
     };
   }, [index, finished]);
+
+  useEffect(() => {
+    if (!finished || savedRef.current) return;
+    savedRef.current = true;
+
+    const evaluated = entries.filter((e) => e.result);
+    const overall =
+      evaluated.length > 0
+        ? evaluated.reduce((sum, e) => sum + (e.result?.score ?? 0), 0) /
+          evaluated.length
+        : 0;
+
+    supabase
+      .from("interview_attempts")
+      .insert({
+        round_id: roundId,
+        category: roundTitle,
+        option_title: optionTitle,
+        score: Math.round(overall * 10),
+        answer_type: entries.some((e) => e.mode === "video")
+          ? "Sign Video"
+          : "Text",
+        question_count: entries.length,
+        answers: entries,
+      })
+      .then(({ error }) => {
+        if (error) console.log("Save attempt error:", error.message);
+      });
+  }, [finished]);
 
   const handleAnswered = (done: boolean, value?: string) => {
     setAnswered(done);

@@ -1,7 +1,14 @@
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    ActivityIndicator,
+    FlatList,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 type Attempt = {
   id: string;
@@ -12,56 +19,14 @@ type Attempt = {
   questions: number;
 };
 
-const attempts: Attempt[] = [
-  {
-    id: "1",
-    category: "HR Interview",
-    date: "12 Oct 2026",
-    score: 82,
-    answerType: "Sign Video",
-    questions: 10,
-  },
-  {
-    id: "2",
-    category: "Technical",
-    date: "10 Oct 2026",
-    score: 74,
-    answerType: "Text",
-    questions: 15,
-  },
-  {
-    id: "3",
-    category: "Communication",
-    date: "08 Oct 2026",
-    score: 91,
-    answerType: "Sign Video",
-    questions: 8,
-  },
-  {
-    id: "4",
-    category: "Behavioral",
-    date: "05 Oct 2026",
-    score: 58,
-    answerType: "Text",
-    questions: 10,
-  },
-  {
-    id: "5",
-    category: "HR Interview",
-    date: "02 Oct 2026",
-    score: 67,
-    answerType: "Text",
-    questions: 12,
-  },
-  {
-    id: "6",
-    category: "Technical",
-    date: "29 Sep 2026",
-    score: 45,
-    answerType: "Text",
-    questions: 20,
-  },
-];
+type Row = {
+  id: string;
+  category: string;
+  created_at: string;
+  score: number;
+  answer_type: "Text" | "Sign Video";
+  question_count: number;
+};
 
 const filters = [
   "All",
@@ -77,10 +42,53 @@ const getScoreColor = (score: number) => {
   return "#dc2626";
 };
 
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
 export default function History() {
   const { category } = useLocalSearchParams<{ category?: string }>();
   const [selectedFilter, setSelectedFilter] = useState("All");
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const filterListRef = useRef<FlatList<string>>(null);
+
+  const loadAttempts = useCallback(async () => {
+    setErrorMessage(null);
+    const { data, error } = await supabase
+      .from("interview_attempts")
+      .select("id, category, created_at, score, answer_type, question_count")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.log("Load history error:", error.message);
+      setErrorMessage("Could not load history. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    setAttempts(
+      (data as Row[]).map((row) => ({
+        id: row.id,
+        category: row.category,
+        date: formatDate(row.created_at),
+        score: row.score,
+        answerType: row.answer_type,
+        questions: row.question_count,
+      })),
+    );
+    setLoading(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAttempts();
+    }, [loadAttempts]),
+  );
 
   useEffect(() => {
     if (category && filters.includes(category)) {
@@ -162,69 +170,81 @@ export default function History() {
         />
       </View>
 
-      <FlatList
-        data={filteredAttempts}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        ListEmptyComponent={
-          <View style={{ alignItems: "center", marginTop: 48 }}>
-            <Ionicons name="document-text-outline" size={48} color="#9ca3af" />
-            <Text style={{ color: "#6b7280", marginTop: 8 }}>
-              No attempts found
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "#f9fafb",
-              borderRadius: 14,
-              padding: 14,
-              marginBottom: 10,
-            }}
-          >
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: "#eff6ff",
-                justifyContent: "center",
-                alignItems: "center",
-                marginRight: 12,
-              }}
-            >
+      {loading ? (
+        <View style={{ marginTop: 48, alignItems: "center" }}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredAttempts}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          ListEmptyComponent={
+            <View style={{ alignItems: "center", marginTop: 48 }}>
               <Ionicons
-                name={item.answerType === "Sign Video" ? "videocam" : "create"}
-                size={22}
-                color="#2563eb"
+                name="document-text-outline"
+                size={48}
+                color="#9ca3af"
               />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: "600", fontSize: 16 }}>
-                {item.category}
-              </Text>
-              <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 2 }}>
-                {item.date} · {item.questions} questions · {item.answerType}
+              <Text style={{ color: "#6b7280", marginTop: 8 }}>
+                {errorMessage ?? "No attempts found"}
               </Text>
             </View>
-
-            <Text
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
               style={{
-                fontSize: 18,
-                fontWeight: "bold",
-                color: getScoreColor(item.score),
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "#f9fafb",
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 10,
               }}
             >
-              {item.score}%
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: "#eff6ff",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons
+                  name={
+                    item.answerType === "Sign Video" ? "videocam" : "create"
+                  }
+                  size={22}
+                  color="#2563eb"
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: "600", fontSize: 16 }}>
+                  {item.category}
+                </Text>
+                <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 2 }}>
+                  {item.date} · {item.questions} questions · {item.answerType}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  color: getScoreColor(item.score),
+                }}
+              >
+                {item.score}%
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </View>
   );
 }
